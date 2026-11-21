@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>OTED · Localização</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#14245c;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .box{max-width:420px;width:100%;padding:28px 22px;text-align:center}
+  h1{font-size:26px;margin:6px 0 4px;letter-spacing:1px}
+  .k{color:#f6c500;font-size:12px;font-weight:700;letter-spacing:2px}
+  .pin{width:84px;height:84px;border-radius:50%;background:#f6c500;color:#14245c;font-size:42px;display:flex;align-items:center;justify-content:center;margin:18px auto}
+  .pulse{animation:p 1.3s infinite}@keyframes p{0%{box-shadow:0 0 0 0 rgba(246,197,0,.7)}100%{box-shadow:0 0 0 22px rgba(246,197,0,0)}}
+  p{color:#d3dbef;line-height:1.5}
+  button,a.btn{display:block;width:100%;box-sizing:border-box;border:0;border-radius:14px;padding:15px;font-size:17px;font-weight:800;background:#f6c500;color:#14245c;text-decoration:none;margin-top:12px;cursor:pointer}
+  .sec{background:transparent;border:2px solid rgba(255,255,255,.5);color:#fff}
+  .ajuda{text-align:left;background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;font-size:14px;margin-top:14px}
+  .ajuda ol{margin:6px 0 0;padding-left:20px}.ajuda li{margin:4px 0}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="k">OTED · PRF · RONDÔNIA 2026</div>
+  <h1>Localização</h1>
+  <div class="pin pulse" id="pin">📍</div>
+  <p id="msg">Toque no botão e, quando o navegador perguntar, escolha <b>Permitir</b>.</p>
+  <button id="go">Obter minha localização</button>
+  <a class="btn sec hide" id="voltar">Voltar ao sistema sem localização</a>
+  <div class="ajuda hide" id="ajuda">
+    <b>Como liberar no Android (Chrome):</b>
+    <ol>
+      <li>Ligue a <b>Localização</b> do celular (puxe a barra do topo › ícone 📍).</li>
+      <li>Toque no ícone à esquerda do endereço (🔒 ou ⚙) › <b>Permissões</b> › <b>Localização</b> › <b>Permitir</b>.</li>
+      <li>Ou: Chrome › ⋮ › Configurações › Configurações do site › Localização › desbloqueie este site.</li>
+      <li>Volte aqui e toque em <b>Obter minha localização</b> de novo.</li>
+    </ol>
+    <b>iPhone:</b> Ajustes › Privacidade › Serviços de Localização › Safari › <b>Durante o Uso</b>.
+  </div>
+</div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var volta = q.get('volta') || '';
+  var acao = q.get('acao') || 'presenca';
+  var tipo = q.get('tipo') || '';
+  // só devolve para apps do Google Apps Script (evita redirecionamento para sites estranhos)
+  if (!/^https:\/\/script\.google\.com\/(a\/macros\/[^/]+|macros)\/s\/[\w-]+\/(exec|dev)$/.test(volta)) {
+    document.getElementById('msg').innerHTML = 'Link inválido. Abra esta página pelo botão do sistema OTED.';
+    document.getElementById('go').classList.add('hide');
+    return;
+  }
+  var base = volta + '?acao=' + encodeURIComponent(acao) + (tipo ? '&tipo=' + encodeURIComponent(tipo) : '');
+  var vb = document.getElementById('voltar'); vb.href = base;
+  var msg = document.getElementById('msg'), go = document.getElementById('go');
+  var best = null, watch = null, timer = null;
+
+  function enviar() {
+    if (watch !== null) navigator.geolocation.clearWatch(watch);
+    clearTimeout(timer);
+    var g = [best.lat.toFixed(6), best.lng.toFixed(6), Math.round(best.acc), Date.now()].join(',');
+    msg.innerHTML = '✓ Localização obtida (±' + Math.round(best.acc) + ' m). Voltando ao sistema…';
+    location.replace(base + '&geo=' + encodeURIComponent(g));
+  }
+  function erro(e) {
+    if (best) return enviar();
+    var t = e && e.code === 1 ? 'A permissão de localização foi negada.' : e && e.code === 3 ? 'O GPS demorou para responder.' : 'Não foi possível obter a localização.';
+    msg.innerHTML = t + ' Veja abaixo como liberar e tente de novo.';
+    document.getElementById('ajuda').classList.remove('hide');
+    vb.classList.remove('hide');
+    go.textContent = 'Tentar novamente'; go.disabled = false;
+  }
+  go.onclick = function () {
+    if (!navigator.geolocation) return erro({});
+    go.disabled = true; go.textContent = 'Obtendo localização…';
+    msg.innerHTML = 'Aguarde alguns segundos, de preferência em local aberto.';
+    watch = navigator.geolocation.watchPosition(function (p) {
+      var c = p.coords;
+      if (!best || c.accuracy < best.acc) best = { lat: c.latitude, lng: c.longitude, acc: c.accuracy };
+      msg.innerHTML = 'Precisão atual: ±' + Math.round(best.acc) + ' m…';
+      if (best.acc <= 25) enviar();
+    }, erro, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    timer = setTimeout(function () { if (best) enviar(); }, 12000);
+  };
+  // se o navegador já tem a permissão, começa sozinho
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then(function (r) { if (r.state === 'granted') go.click(); }).catch(function () { });
+  }
+})();
+</script>
+</body>
+</html>
